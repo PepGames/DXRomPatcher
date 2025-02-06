@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html translate="no">
+
+<!--
+Note for myself on how to add new versions:
+- Duplicate this file
+- Replace all version string with new version string
+- Change const selectedVersion
+- Add xdelta and cue files to the correct directory
+- In more-extra-js.js: Add new version
+-->
+
+<head>
+	<title>DX ROM Patcher</title>
+	<meta http-equiv="content-Type" content="text/html; charset=UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" />
+
+
+
+	<!-- Rom Patcher JS needed CSS/JS files -->
+	<link type="text/css" rel="stylesheet" href="./rom-patcher-js/style.css" media="all" />
+</head>
+
+<body style="font: 15px 'Open Sans', sans-serif; background-color: #080808; color: #e4e4e6; padding-top: 20px;">
+<div>
+
+	<!-- Rom Patcher JS container -->
+	<!--
+		The following elements are required for Rom Patcher JS to work:
+			#rom-patcher-input-file-rom
+			#rom-patcher-select-patch
+			#rom-patcher-button-apply
+		The rest of elements are informative and can be removed, though it's recommended to keep them for a better user experience.
+	-->
+
+	<center><div style="text-align: left; max-width: 800px;">
+	<div id="rom-patcher-container" style="background-color: #080808;">
+		<center>
+			<a href="./index"><button style="background-color: #6c1175">Back to Patcher</button></a>
+			<a href="https://github.com/PepGames/PokemonXD_DX_DirectorsCut"><button style="background-color: #6c1175">About (Github)</button></a>
+		</center>
+	</div>
+		<h1 style="color: #b688ba">Speedway Mod Changelog</h1>
+		<h2>3.0</h2>
+		<ul>
+<p><li>Test Patch Test
+</li></p></ul>
+
+	</div></center>
+
+	<div id="rom-patcher-powered" class="text-center">
+		<a href="https://github.com/marcrobledo/RomPatcher.js" target="_blank"><img
+				src="rom-patcher-js/assets/powered_by_rom_patcher_js.png" loading="lazy" />Powered by Rom Patcher JS</a>
+	</div>
+</div>
+	<script type="text/javascript" src="./rom-patcher-js/more-extra-js.js"></script>
+</body>
+
+</html>
