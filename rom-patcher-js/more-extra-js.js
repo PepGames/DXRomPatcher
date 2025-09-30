@@ -6,8 +6,8 @@ document.getElementById("versionSelect").value = selectedVersion;
 
 function changeVersion() {
 	if (document.getElementById("versionSelect").value == 0) {
-		window.location.href = "./DX_3_0_b"
+		window.location.href = "./3_0_b"
 	} else if (document.getElementById("versionSelect").value == 1) {
-		window.location.href = "./DX_3_0_0"
+		window.location.href = "./3_0_0"
 	} 
 }
