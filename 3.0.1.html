@@ -16,8 +16,9 @@ Note for myself on how to add new versions:
 	<meta http-equiv="content-Type" content="text/html; charset=UTF-8" />
 	<meta name="viewport" content="width=device-width, initial-scale=1.0.1, maximum-scale=1.0.1, user-scalable=0" />
 
+	<script>
 	function dxPing() {
-		// --- constants ---
+	// --- constants ---
 		const COUNTER_URL   = "https://script.google.com/macros/s/AKfycbx8x78cwsf5WOM35JYeiFu-Vs4ngnT3Xj0LgdpGqrBYhe5zkyVVREUnWP3SJkp8L_c_/exec";
 		const COUNTER_TOKEN = "8181211210";
 		const VERSION_TAG   = "3.0.1";
@@ -30,11 +31,12 @@ Note for myself on how to add new versions:
 		const img = new Image();
 		img.src = url;
 
-		// keep a reference alive briefly so the browser doesn’t garbage-collect too early
+		// keep a reference alive briefly so the browser doesn’t GC too early
 		window.__dxImgs ||= [];
 		window.__dxImgs.push(img);
 		setTimeout(() => window.__dxImgs.shift(), 2000);
 	}
+	</script>
 
 	<!-- Rom Patcher JS needed CSS/JS files -->
 	<link type="text/css" rel="stylesheet" href="./rom-patcher-js/style.css" media="all" />
