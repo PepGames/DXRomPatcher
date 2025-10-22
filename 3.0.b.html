@@ -16,7 +16,58 @@ Note for myself on how to add new versions:
 	<meta http-equiv="content-Type" content="text/html; charset=UTF-8" />
 	<meta name="viewport" content="width=device-width, initial-scale=1.0.1, maximum-scale=1.0.1, user-scalable=0" />
 
+	<script>
+  		const VERSION_TAG = "3.0.b"; // single global version constant
+	</script>
 
+	<script>
+	function dxPing() {
+		const COUNTER_URL   = "https://script.google.com/macros/s/AKfycbyHxZg6S1er9xYqhf07cTvE497IfDhjeaT2HrBrbm3Rno_3kwkBnn8b3FsIZH-LGds/exec";
+		const COUNTER_TOKEN = "8181211210";
+
+		const params = new URLSearchParams({
+			authuser: "0",
+			hit: "1",
+			ver: VERSION_TAG,
+			token: COUNTER_TOKEN,
+			t: String(Date.now())
+		});
+
+		const url = `${COUNTER_URL}?${params.toString()}`;
+		console.log("[DX] ping ->", url);
+
+		try {
+			fetch(url, { mode: "no-cors", cache: "no-store", credentials: "omit", keepalive: true });
+		} catch {}
+
+		const img = document.createElement("img");
+		img.src = url + "&_i=1";
+		img.alt = "";
+		img.width = 1;
+		img.height = 1;
+		img.style.cssText = "position:absolute;left:-9999px;top:-9999px;width:1px;height:1px";
+		img.onload = img.onerror = () => setTimeout(() => img.remove(), 4000);
+		document.body.appendChild(img);
+	}
+	</script>
+
+	<script>
+	(function () {
+		const COUNT_KEY = "dx_counted_" + VERSION_TAG;
+
+		function maybeCount(e) {
+			const btn = e.target && e.target.closest('#rom-patcher-button-apply');
+			if (!btn) return;
+			if (btn.disabled) return;
+			if (sessionStorage.getItem(COUNT_KEY)) return;
+
+			dxPing();
+			sessionStorage.setItem(COUNT_KEY, "1");
+		}
+
+		document.addEventListener('click', maybeCount, true);
+		})();
+	</script>
 
 	<!-- Rom Patcher JS needed CSS/JS files -->
 	<link type="text/css" rel="stylesheet" href="./rom-patcher-js/style.css" media="all" />
