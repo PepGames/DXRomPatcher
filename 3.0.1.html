@@ -18,23 +18,35 @@ Note for myself on how to add new versions:
 
 	<script>
 	function dxPing() {
-	// --- constants ---
 		const COUNTER_URL   = "https://script.google.com/macros/s/AKfycbyHxZg6S1er9xYqhf07cTvE497IfDhjeaT2HrBrbm3Rno_3kwkBnn8b3FsIZH-LGds/exec";
 		const COUNTER_TOKEN = "8181211210";
 		const VERSION_TAG   = "3.0.1";
 
-		// --- build full URL ---
-		const url = `${COUNTER_URL}?hit=1&ver=${encodeURIComponent(VERSION_TAG)}&token=${encodeURIComponent(COUNTER_TOKEN)}&t=${Date.now()}`;
+		// Build URL with authuser=0 so Google doesn't pin to a random logged-in account
+		const params = new URLSearchParams({
+			authuser: "0",
+			hit: "1",
+			ver: VERSION_TAG,
+			token: COUNTER_TOKEN,
+			t: String(Date.now())
+		});
+		const url = `${COUNTER_URL}?${params.toString()}`;
 
-		// --- fire request via image beacon ---
 		console.log("[DX] ping ->", url);
-		const img = new Image();
-		img.src = url;
 
-		// keep a reference alive briefly so the browser doesn’t GC too early
-		window.__dxImgs ||= [];
-		window.__dxImgs.push(img);
-		setTimeout(() => window.__dxImgs.shift(), 2000);
+		// 1) Cookie-less fetch to avoid account binding
+		try {
+			fetch(url, { mode: "no-cors", cache: "no-store", credentials: "omit", keepalive: true });
+		} catch {}
+
+		// 2) DOM-anchored image fallback so it's guaranteed to fire
+		const img = document.createElement("img");
+		img.src = url + "&_i=1";
+		img.alt = "";
+		img.width = 1; img.height = 1;
+		img.style.cssText = "position:absolute;left:-9999px;top:-9999px;width:1px;height:1px";
+		img.onload = img.onerror = () => setTimeout(() => img.remove(), 4000);
+		document.body.appendChild(img);
 	}
 	</script>
 
