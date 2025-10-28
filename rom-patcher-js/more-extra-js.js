@@ -1,6 +1,7 @@
 document.getElementById("versionSelect").innerHTML += "<option value='0'>DX 3.0.b (Beta)</option>";
 document.getElementById("versionSelect").innerHTML += "<option value='1'>DX 3.0.0 </option>";
-document.getElementById("versionSelect").innerHTML += "<option value='2'>DX 3.0.1 (Latest)</option>";
+document.getElementById("versionSelect").innerHTML += "<option value='2'>DX 3.0.1 </option>";
+document.getElementById("versionSelect").innerHTML += "<option value='3'>DX 3.0.2 (Latest)</option>";
 
 
 
@@ -13,5 +14,8 @@ function changeVersion() {
 		window.location.href = "./3.0.0"
 	} else if (document.getElementById("versionSelect").value == 2) {
 		window.location.href = "./3.0.1"
+	} else if (document.getElementById("versionSelect").value == 3) {
+		window.location.href = "./3.0.2"
 	} 
+	
 }
