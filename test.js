@@ -23,9 +23,18 @@
 	- APS test
 		- Patch: http://dorando.emuverse.com/projects/eduardo_a2j/zelda-ocarina-of-time.html
 		- ROM:   Legend of Zelda, The - Ocarina of Time (USA).z64 [CRC32=7e107c35]
+	- APS (GBA) test
+		- Patch: http://ngplus.net/InsaneDifficultyArchive/www.insanedifficulty.com/board/index9837.html?/files/file/65-final-fantasy-tactics-advance-x/
+		- ROM:   Final Fantasy Tactics Advance (USA).gba [CRC32=5645e56c]
 	- RUP test
 		- Patch: https://www.romhacking.net/translations/843/
 		- ROM:   Uchuu no Kishi - Tekkaman Blade (Japan).sfc [CRC32=cd16c529]
+	- EBP test
+		- Patch: https://forum.starmen.net/forum/Community/PKHack/NickBound/page/1#post2333521
+		- ROM:   EarthBound (USA).sfc [CRC32=dc9bb451]
+	- BDF test
+		- Patch: https://www.romhacking.net/hacks/5813/
+		- ROM:   Tetris (World) (Rev 1).gb [CRC32=46df91ad]
 	- xdelta test
 		- Patch: https://www.romhacking.net/hacks/2871/
 		- ROM:   New Super Mario Bros. (USA, Australia).nds [CRC32=0197576a]
@@ -37,6 +46,7 @@ const { existsSync } = require('fs');
 const BinFile = require('./rom-patcher-js/modules/BinFile');
 const HashCalculator = require('./rom-patcher-js/modules/HashCalculator');
 const RomPatcher = require('./rom-patcher-js/RomPatcher');
+const BPS = require('./rom-patcher-js/modules/RomPatcher.format.bps');
 
 
 
@@ -74,16 +84,41 @@ const TEST_PATCHES = [
 		patchCrc32: 0x7b70119d,
 		patchDownload: 'http://dorando.emuverse.com/projects/eduardo_a2j/zelda-ocarina-of-time.html',
 		outputCrc32: 0x7866f1ca
+	},  {
+		title: 'APS (GBA) - Final Fantasy Tactics Advance X',
+		romFile: 'Final Fantasy Tactics Advance (USA).gba',
+		romCrc32: 0x5645e56c,
+		patchFile: 'FFTA_X_1.0.3.1.aps',
+		patchCrc32: 0x77e5f2ae,
+		patchDownload: 'http://ngplus.net/InsaneDifficultyArchive/www.insanedifficulty.com/board/index9837.html?/files/file/65-final-fantasy-tactics-advance-x/',
+		outputCrc32: 0x49a5539a
 	}, {
-		title: 'Tekkaman Blade translation',
+		title: 'RUP - Tekkaman Blade translation',
 		romFile: 'Uchuu no Kishi - Tekkaman Blade (Japan).sfc',
 		romCrc32: 0x7e107c35,
 		patchFile: 'Tekkaman Blade v1.0.rup',
 		patchCrc32: 0x621ab323,
 		patchDownload: 'https://www.romhacking.net/hacks/4633/',
-		outputCrc32: 0xe83e9b0a
+		//outputCrc32: 0xe83e9b0a //Headerless
+		outputCrc32: 0xda833bce //Headered
 	}, {
-		title: 'NSMB Hack Domain Infusion',
+		title: 'EBP - Mother Rebound',
+		romFile: 'EarthBound (USA).sfc',
+		romCrc32: 0xdc9bb451,
+		patchFile: 'Mother_Rebound.ebp',
+		patchCrc32: 0x271719e1,
+		patchDownload: 'https://forum.starmen.net/forum/Community/PKHack/NickBound/page/1#post2333521',
+		outputCrc32: 0x5065b02f
+	}, {
+		title: 'BDF - Tetris - Rosy Retrospection',
+		romFile: 'Tetris (World) (Rev 1).gb',
+		romCrc32: 0x46df91ad,
+		patchFile: 'rosy_retrospection.bdf',
+		patchCrc32: 0xcc61564a,
+		patchDownload: 'https://www.romhacking.net/hacks/5813/',
+		outputCrc32: 0x3d400209
+	}, {
+		title: 'VCDIFF - NSMB Hack Domain Infusion',
 		romFile: 'New Super Mario Bros. (USA, Australia).nds',
 		romCrc32: 0x0197576a,
 		patchFile: 'nsmb_infusion10a.xdelta',
@@ -128,7 +163,7 @@ _test('HashCalculator integrity', function () {
 const MODIFIED_TEST_DATA = (new Uint8Array([
 	98, 91, 64, 8, 35, 53, 122, 167, 52, 253, 222, 156, 247, 82, 227, 213, 22, 221, 17, 247, 107, 102, 164, 254, 221, 8, 207, 63, 117, 164, 223, 10, 1, 77, 87, 123, 48, 9, 111, 64, 233, 118, 1, 36, 1, 60, 208, 245, 136, 126, 29, 231, 168, 18, 125, 172, 11, 184, 81, 20, 16, 30, 154, 16, 236, 21, 5, 74, 255, 112, 171, 198, 185, 89, 2, 98, 45, 164, 214, 55, 103, 15, 217, 95, 212, 133, 184, 21, 67, 144, 198, 163, 76, 35, 248, 229, 163, 37, 103, 33, 193, 96, 77, 255, 117, 89, 193, 61, 64, 253, 119, 82, 49, 187, 195, 165, 205, 140, 222, 134, 249, 68, 224, 248, 144, 207, 18, 126
 ])).buffer;
-['ips', 'bps', 'ppf', 'ups', 'aps', 'rup'].forEach(function (patchFormat) {
+['ips', 'bps', 'ppf', 'ups', 'aps', 'rup', 'ebp'].forEach(function (patchFormat) {
 	_test('create and apply ' + patchFormat.toUpperCase(), function () {
 		const originalFile = new BinFile(TEST_DATA);
 		const modifiedFile = new BinFile(MODIFIED_TEST_DATA);
@@ -148,13 +183,43 @@ const MODIFIED_TEST_DATA = (new Uint8Array([
 });
 
 
+// values >= 2^31 used to overflow and hang BPS export (#59)
+_test('BPS export and parse large values', function () {
+	const MB = 1024 * 1024;
+
+	const patch = new BPS();
+	patch.sourceSize = 3000 * MB;
+	patch.targetSize = 0xffffffff;
+	patch.actions = [
+		{ type: 0, length: 600 * MB },
+		{ type: 2, length: 1, relativeOffset: 1500 * MB },
+		{ type: 3, length: 1, relativeOffset: -1500 * MB }
+	];
+	patch.patchChecksum = patch.calculateFileChecksum();
+
+	const parsedPatch = BPS.fromFile(patch.export());
+
+	if (parsedPatch.sourceSize !== patch.sourceSize || parsedPatch.targetSize !== patch.targetSize)
+		throw new Error('invalid source or target size');
+
+	patch.actions.forEach(function (action, i) {
+		const parsedAction = parsedPatch.actions[i];
+
+		if (parsedAction.type !== action.type || parsedAction.length !== action.length)
+			throw new Error('invalid action #' + i);
+		if (action.relativeOffset !== undefined && parsedAction.relativeOffset !== action.relativeOffset)
+			throw new Error('invalid relative offset in action #' + i);
+	});
+});
+
+
 
 
 TEST_PATCHES.forEach(function (patchInfo) {
 	const patchPath = TEST_PATH + 'patches/' + patchInfo.patchFile;
 	if (!existsSync(patchPath)) {
 		console.log(chalk.yellow('! skipping patch ' + patchInfo.title));
-		console.log(chalk.yellow('        patch file not found: ' + patchInfo.patchFile));
+		console.log(chalk.yellow('        patch file not found: ' + TEST_PATH + 'patches/' + patchInfo.patchFile));
 		console.log(chalk.yellow('        download patch at ' + patchInfo.patchDownload));
 		return false;
 	}
@@ -170,7 +235,7 @@ TEST_PATCHES.forEach(function (patchInfo) {
 	const romPath = TEST_PATH + 'roms/' + patchInfo.romFile;
 	if (!existsSync(romPath)) {
 		console.log(chalk.yellow('! skipping patch ' + patchInfo.title));
-		console.log(chalk.yellow('        ROM file not found: ' + patchInfo.romFile));
+		console.log(chalk.yellow('        ROM file not found: ' + TEST_PATH + 'roms/' + patchInfo.romFile));
 		return false;
 	}
 	const romFile = new BinFile(romPath);
