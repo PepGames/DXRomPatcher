@@ -46,6 +46,15 @@
   const progress = document.getElementById("dx-check-progress");
   const reload = document.getElementById("dx-reload");
   const requirements = document.getElementById("dx-requirements");
+  // Keep only the last Apply milestone for this release in this tab. A reloaded
+  // page still has to ask for the ISO again and verify its contents.
+  const runKey = "dx-apply-progress-" + release;
+  let previousRun = null;
+  let savedPercent = null;
+  try {
+    previousRun = sessionStorage.getItem(runKey);
+    sessionStorage.removeItem(runKey);
+  } catch { /* A storage-restricted tab can still use the chooser. */ }
   requirements.open = !window.matchMedia("(max-width: 760px)").matches;
   reload.addEventListener("click", () => location.reload());
   document.addEventListener("dx-patcher-unavailable", () => {
@@ -62,13 +71,13 @@
     mismatch: [0, "Disc doesn’t match", "Choose your clean USA ISO. Renaming the file does not change its contents.", "error"],
     readError: [0, "Disc couldn’t be read", "Make sure the ISO is available on this device, then choose it again.", "error"],
     waitingPatch: [1, "Loading the DX patch…", "Your disc passed verification. Apply becomes available when the release patch is ready."],
-    ready: [1, "Ready to apply", "Your source matches the supported USA disc. Apply DX " + release + " to create a patched ISO.", "good"],
+    ready: [1, "Ready to apply", "DX " + release + " needs about 1.46 GB of temporary browser storage, plus space to save the ISO.", "good"],
     reading: [1, "Reading the verified disc…", "Keep this page open while your browser prepares the ISO for patching."],
-    applying: [1, "Applying patch…", "Keep this page open while the browser creates your patched ISO."],
-    applyError: [1, "Patch couldn’t be applied", "Try Apply patch again, or choose another source disc image.", "error"],
+    applying: [1, "Applying patch…", "Keep this tab open while your browser writes the ISO in sections."],
+    applyError: [1, "Patch couldn’t be applied", "Your source disc is still verified.", "error"],
     patchError: [0, "Release patch unavailable", "Reload this release to fetch its bundled patch again.", "error"],
     saveError: [2, "Your ISO is ready to save", "Use Save patched ISO again to start the download.", "error"],
-    requested: [2, "Download requested", "Check your browser’s downloads. If the ISO is missing, use Save patched ISO again.", "good"]
+    requested: [2, "Download requested", "If the ISO is missing, choose Save patched ISO again. Once it finishes saving, you can clear the temporary copy.", "good"]
   };
 
   document.addEventListener("dx-disc-state", event => {
@@ -81,6 +90,23 @@
     work.dataset.tone = tone || "neutral";
     title.textContent = heading;
     help.textContent = instruction;
+    if (state === "empty" && previousRun !== null && /^(?:100|[1-9]?\d)$/.test(previousRun)) {
+      title.textContent = "Previous patch run was interrupted";
+      help.textContent = "The last saved progress update was " + previousRun + "%. Choose your original USA ISO again to retry.";
+    }
+    previousRun = null;
+    try {
+      if (state === "applying" && Number.isInteger(percent)) {
+        const milestone = Math.floor(percent / 5) * 5;
+        if (milestone !== savedPercent) {
+          sessionStorage.setItem(runKey, String(milestone));
+          savedPercent = milestone;
+        }
+      } else if (savedPercent !== null && ["requested", "saveError", "applyError", "checking"].includes(state)) {
+        sessionStorage.removeItem(runKey);
+        savedPercent = null;
+      }
+    } catch { /* Progress reporting does not require session storage. */ }
     name.textContent = fileName || "No file selected";
     choose.textContent = fileName ? "Choose another ISO" : "Choose ISO";
     steps.forEach((item, index) => {
@@ -88,7 +114,8 @@
       if (index === step) item.setAttribute("aria-current", "step");
       else item.removeAttribute("aria-current");
     });
-    progress.hidden = state !== "checking";
+    progress.hidden = state !== "checking" && state !== "applying";
+    progress.setAttribute("aria-label", state === "applying" ? "Patched ISO written" : "Disc verification");
     if (Number.isFinite(percent)) progress.value = percent;
     else progress.removeAttribute("value");
     reload.hidden = state !== "patchError";

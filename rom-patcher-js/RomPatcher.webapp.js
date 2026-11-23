@@ -62,6 +62,7 @@ const RomPatcherWeb = (function () {
 		fixChecksum: false,
 		requireValidation: false,
 		requireExactDisc: false,
+		streamDiscPatch: false,
 
 		allowDropFiles: false,
 
@@ -81,9 +82,20 @@ const RomPatcherWeb = (function () {
 
 	let patchLoadError = '';
 	let outputUrl = null;
+	let diskWorker = null;
+	const diskWorkerPath = ROM_PATCHER_JS_PATH + 'RomPatcher.webworker.dx-apply.js';
 
 	function clearOutput() {
+		if (diskWorker) {
+			diskWorker.postMessage({ type: 'dispose' });
+			diskWorker = null;
+		}
 		if (!outputUrl) return;
+		const clear = document.getElementById('dx-clear-output');
+		if (clear) {
+			clear.hidden = true;
+			clear.disabled = false;
+		}
 		const link = document.getElementById('dx-save-again');
 		if (link) {
 			link.hidden = true;
@@ -94,14 +106,16 @@ const RomPatcherWeb = (function () {
 		outputUrl = null;
 	}
 
-	function offerDownload(patchedRom) {
+	function offerDownload(blob, fileName) {
 		const visibleLink = document.getElementById('dx-save-again');
 		const link = visibleLink || document.createElement('a');
-		outputUrl = URL.createObjectURL(new Blob([patchedRom._u8array], { type: patchedRom.fileType }));
+		outputUrl = URL.createObjectURL(blob);
 		link.href = outputUrl;
-		link.download = patchedRom.fileName;
+		link.download = fileName;
 		if (visibleLink) link.hidden = false;
 		else document.body.appendChild(link);
+		const clear = document.getElementById('dx-clear-output');
+		if (clear && diskWorker) clear.hidden = false;
 		try {
 			link.click();
 			showDiscStatus('requested', 'Download requested. Check your browser downloads or Files.');
@@ -206,6 +220,76 @@ const RomPatcherWeb = (function () {
 			reader.readAsArrayBuffer(selection.file);
 		} catch (error) {
 			readFailed();
+		}
+	}
+
+	// The DX releases are independent VCDIFF windows. Send the verified File handle
+	// to the worker; reading the entire ISO here would exhaust memory on some phones.
+	function streamVerifiedDisc(selection) {
+		clearOutput();
+		selection.applyError = '';
+		applyingDisc = true;
+		_setToastError();
+		htmlElements.disableAll();
+		_setApplyButtonSpinner(true);
+		showDiscStatus('applying', 'Preparing temporary storage for the patched ISO…', 0);
+		let worker;
+		const fail = message => {
+			if (worker && diskWorker !== worker) return;
+			clearOutput();
+			failDiscApply(message);
+		};
+		try {
+			const patchFile = patch._originalPatchFile;
+			const release = _getEmbededPatchInfo(patchFile.fileName);
+			const outputName = release.outputName + '.' + release.outputExtension;
+			worker = new Worker(diskWorkerPath);
+			diskWorker = worker;
+			worker.onerror = worker.onmessageerror = () => {
+				fail('The patch worker stopped. Your disc is still verified. Try Apply patch again.');
+			};
+			let lastPercent = -1;
+			worker.onmessage = ({ data }) => {
+				if (diskWorker !== worker) return;
+				if (data.type === 'discarded') {
+					diskWorker = null;
+					clearOutput();
+					showDiscStatus('ready', 'Temporary copy cleared. Your source disc is still verified.');
+					htmlElements.get('button-apply')?.focus({ preventScroll: true });
+					return;
+				}
+				if (data.type === 'discardError') {
+					const button = document.getElementById('dx-clear-output');
+					if (button) button.disabled = false;
+					showDiscStatus('requested', data.message);
+					return;
+				}
+				if (!applyingDisc) return;
+				if (data.type === 'progress') {
+					const percent = Math.floor(100 * data.producedBytes / data.totalBytes);
+					if (Number.isFinite(percent) && percent > lastPercent && percent <= 100) {
+						lastPercent = percent;
+						showDiscStatus('applying', 'Writing the patched ISO… ' + percent + '%', percent);
+					}
+				} else if (data.type === 'error') {
+					fail(data.message || 'The patch worker stopped before the ISO was ready.');
+				} else if (data.type === 'done') {
+					try {
+						// A disk-backed File is already a Blob. Re-wrapping its bytes
+						// or calling arrayBuffer() would reintroduce a disc-sized copy.
+						offerDownload(data.file, outputName);
+						applyingDisc = false;
+						_setApplyButtonSpinner(false);
+						htmlElements.enableAll();
+					} catch (error) {
+						fail('The browser could not open the completed ISO for download. Your disc is still verified.');
+					}
+				}
+			};
+			// Clone the patch (tens of MB) so retry does not need to fetch it again.
+			worker.postMessage({ type: 'apply', source: selection.file, patch: patchFile._u8array, outputName });
+		} catch (error) {
+			fail('Could not start the patch worker. Reload the page if retrying Apply does not work.');
 		}
 	}
 
@@ -652,7 +736,7 @@ const RomPatcherWeb = (function () {
 				}
 
 				if (typeof settings.onpatch === 'function') settings.onpatch(patchedRom);
-				if (settings.requireExactDisc) offerDownload(patchedRom);
+				if (settings.requireExactDisc) offerDownload(new Blob([patchedRom._u8array], { type: patchedRom.fileType }), patchedRom.fileName);
 				else patchedRom.save();
 				_setToastError();
 			} catch (error) {
@@ -1044,12 +1128,29 @@ const RomPatcherWeb = (function () {
 			showDiscStatus('empty', 'Choose your unmodified USA disc image.');
 			document.getElementById('dx-save-again')?.addEventListener('click', event => {
 				if (event.isTrusted && outputUrl) {
+					diskWorker?.postMessage({ type: 'retain' });
 					showDiscStatus('requested', 'Download requested. Check your browser downloads or Files.');
 				}
 			});
+			if (settings.streamDiscPatch && navigator.storage?.getDirectory) {
+				try {
+					const cleanup = new Worker(diskWorkerPath);
+					cleanup.onerror = () => cleanup.terminate();
+					cleanup.postMessage({ type: 'cleanup' });
+				} catch (error) { /* Apply reports storage or worker errors if the user starts a run. */ }
+			}
+			document.getElementById('dx-clear-output')?.addEventListener('click', event => {
+				if (diskWorker && outputUrl) {
+					event.currentTarget.disabled = true;
+					diskWorker.postMessage({ type: 'discard' });
+				}
+			});
 			window.addEventListener('pagehide', () => {
-				if (outputUrl) {
+				if (outputUrl || diskWorker) {
 					clearOutput();
+					applyingDisc = false;
+					_setApplyButtonSpinner(false);
+					htmlElements.enableAll();
 					if (hasVerifiedDisc()) showVerifiedDisc();
 				}
 			});
@@ -1370,7 +1471,7 @@ const RomPatcherWeb = (function () {
 			if (settings.requireExactDisc) {
 				if (applyingDisc || !hasVerifiedDisc()) return;
 				if (!patch) return _setToastError(_('No patch file provided'));
-				return loadVerifiedDisc(discSelection);
+				return settings.streamDiscPatch ? streamVerifiedDisc(discSelection) : loadVerifiedDisc(discSelection);
 			}
 			if (!romFile) return _setToastError(_('No ROM provided'));
 			if (!patch) return _setToastError(_('No patch file provided'));
@@ -1465,6 +1566,8 @@ const RomPatcherWeb = (function () {
 
 				if (typeof newSettings.requireExactDisc === 'boolean')
 					settings.requireExactDisc = newSettings.requireExactDisc;
+				if (typeof newSettings.streamDiscPatch === 'boolean')
+					settings.streamDiscPatch = newSettings.streamDiscPatch;
 
 				if (typeof newSettings.requireValidation === 'boolean')
 					settings.requireValidation = newSettings.requireValidation;

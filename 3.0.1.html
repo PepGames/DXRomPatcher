@@ -62,6 +62,7 @@
 		const myPatcherSettings={
 			language: 'en',
 			requireExactDisc: true,
+			streamDiscPatch: true,
 			allowDropFiles: true /* if true, it adds basic drag and drop support */
 		};
 		try {
@@ -114,11 +115,12 @@
           <input type="file" id="rom-patcher-input-file-rom" aria-describedby="dx-source-name dx-source-help" disabled>
         </div>
         <p id="rom-patcher-disc-status" class="dx-status" role="status" aria-atomic="true">Loading patcher…</p>
-        <progress id="dx-check-progress" class="dx-progress" max="100" aria-label="Checking disc contents" hidden></progress>
+        <progress id="dx-check-progress" class="dx-progress" max="100" aria-label="Patch progress" hidden></progress>
         <div id="rom-patcher-row-error-message"><span id="rom-patcher-error-message" role="status"></span></div>
         <div id="rom-patcher-row-apply" class="dx-apply">
           <button type="button" id="rom-patcher-button-apply" data-localize="yes" disabled>Apply patch</button>
           <a id="dx-save-again" class="dx-save" download hidden>Save patched ISO again</a>
+          <button type="button" id="dx-clear-output" class="dx-reload" hidden>Clear temporary copy</button>
           <button type="button" id="dx-reload" class="dx-reload" hidden>Reload release</button>
         </div>
       </section>
