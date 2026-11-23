@@ -84,7 +84,7 @@ code, .dx-identity dd { font: .85rem/1.5 var(--mono); }
 .dx-disc::after { width: 10px; height: 10px; background: var(--field); border: 2px solid #ddd0e3; }
 .dx-file-text { min-width: 0; flex: 1 1 105px; }
 .dx-file-text strong, .dx-file-text small { display: block; overflow-wrap: anywhere; }
-.dx-file-text strong { font-weight: 650; }
+.dx-file-text strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 650; }
 .dx-file-text small { color: var(--muted); font-size: .83rem; }
 .dx-choose { display: inline-flex; align-items: center; justify-content: center; min-height: 42px; padding: 7px 12px; color: #241428; background: var(--lilac); border-radius: 6px; font-weight: 700; font-size: .92rem; }
 .dx-picker:has(input:disabled) .dx-choose { color: var(--muted); background: var(--field); }
@@ -145,6 +145,13 @@ code, .dx-identity dd { font: .85rem/1.5 var(--mono); }
   .dx-notes-nav { position: static; display: flex; flex-wrap: wrap; gap: 0 16px; align-items: center; margin-bottom: 14px; padding: 4px 14px; }
   .dx-notes-nav p { margin: 0; }
   .dx-notes-nav a { font-size: .85rem; }
+}
+@media (max-width: 480px) {
+  .dx-work[data-state]:not([data-state="empty"]) .dx-picker {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .dx-work[data-state]:not([data-state="empty"]) .dx-choose { grid-column: 1 / -1; justify-self: start; }
 }
 @media (max-width: 355px) {
   .dx-shell { width: calc(100% - 24px); }
