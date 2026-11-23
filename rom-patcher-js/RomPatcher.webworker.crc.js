@@ -1,10 +1,10 @@
 /* Rom Patcher JS v20240302 - Marc Robledo 2016-2024 - http://www.marcrobledo.com/license */
 
-self.importScripts(
+self.importScripts(...[
 	'./RomPatcher.js',
 	'./modules/BinFile.js',
 	'./modules/HashCalculator.js'
-);
+].map(file => file + self.location.search));
 
 
 self.onmessage = event => { // listen for messages from the main thread

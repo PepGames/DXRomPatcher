@@ -77,8 +77,10 @@ async function sweep(directory) {
 }
 
 async function writeOutput(job, request) {
-	importScripts('./modules/BinFile.js', './modules/HashCalculator.js',
-		'./modules/RomPatcher.format.vcdiff.js', './modules/DxVcdiffWindows.js');
+	importScripts(...[
+		'./modules/BinFile.js', './modules/HashCalculator.js',
+		'./modules/RomPatcher.format.vcdiff.js', './modules/DxVcdiffWindows.js'
+	].map(file => file + self.location.search));
 	const source = request.source;
 	const patch = request.patch;
 	const outputName = request.outputName;

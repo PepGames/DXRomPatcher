@@ -38,6 +38,15 @@
 const ROM_PATCHER_JS_PATH = './rom-patcher-js/';
 
 const RomPatcherWeb = (function () {
+	// The DX release pages version this script and its dependencies together.
+	const loaderScript = document.currentScript?.src ||
+		Array.from(document.scripts).find(script => script.src.includes('RomPatcher.webapp.js'))?.src;
+	const loaderUrl = new URL(loaderScript || ROM_PATCHER_JS_PATH, document.baseURI);
+	const assetVersion = loaderUrl.searchParams.get('v');
+	const assetQuery = assetVersion ? '?v=' + encodeURIComponent(assetVersion) : '';
+	const assetUrl = file => new URL(file, loaderUrl).href + assetQuery;
+	const workerUrl = file => ROM_PATCHER_JS_PATH + file + assetQuery;
+
 	const SCRIPT_DEPENDENCIES = [
 		'modules/BinFile.js',
 		'modules/HashCalculator.js',
@@ -83,7 +92,7 @@ const RomPatcherWeb = (function () {
 	let patchLoadError = '';
 	let outputUrl = null;
 	let diskWorker = null;
-	const diskWorkerPath = ROM_PATCHER_JS_PATH + 'RomPatcher.webworker.dx-apply.js';
+	const diskWorkerPath = workerUrl('RomPatcher.webworker.dx-apply.js');
 
 	function clearOutput() {
 		if (diskWorker) {
@@ -315,7 +324,7 @@ const RomPatcherWeb = (function () {
 			if (discSelection === selection) rejectDisc('Could not read or verify this file. Choose the disc image again.', 'readError', selection.name);
 		};
 		try {
-			const worker = new Worker(ROM_PATCHER_JS_PATH + 'RomPatcher.webworker.disc.js');
+			const worker = new Worker(workerUrl('RomPatcher.webworker.disc.js'));
 			selection.worker = worker;
 			worker.onerror = worker.onmessageerror = () => {
 				if (selection.worker === worker) readFailed();
@@ -820,7 +829,7 @@ const RomPatcherWeb = (function () {
 		}
 	}
 
-	const webWorkerCrc = new Worker(ROM_PATCHER_JS_PATH + 'RomPatcher.webworker.crc.js');
+	const webWorkerCrc = new Worker(workerUrl('RomPatcher.webworker.crc.js'));
 	webWorkerCrc.onmessage = event => { // listen for events from the worker
 		//console.log('received_crc');
 		htmlElements.setText('span-crc32', _padZeroes(event.data.crc32, 4));
@@ -858,27 +867,9 @@ const RomPatcherWeb = (function () {
 	}
 
 
-	const _getScriptPath = function () {
-		const currentScripts = document.querySelectorAll('script');
-		var scriptPath;
-		if (document.currentScript) {
-			scriptPath = document.currentScript.src;
-		} else {
-			for (var i = 0; i < currentScripts.length; i++) {
-				if (currentScripts[i].src.indexOf('RomPatcher.webapp.js') !== -1) {
-					scriptPath = currentScripts[i].src;
-					break;
-				}
-			}
-			if (!scriptPath)
-				scriptPath = ROM_PATCHER_JS_PATH;
-		}
-		return scriptPath.substring(0, scriptPath.lastIndexOf('/') + 1);
-	}
 	const _getMissingDependencies = function () {
 		const loaded = new Set(Array.from(document.scripts, script => script.src));
-		const scriptPath = _getScriptPath();
-		return SCRIPT_DEPENDENCIES.map(file => scriptPath + file).filter(url => !loaded.has(url));
+		return SCRIPT_DEPENDENCIES.map(assetUrl).filter(url => !loaded.has(url));
 	}
 
 
@@ -968,7 +959,13 @@ const RomPatcherWeb = (function () {
 			throw new Error('Rom Patcher JS: zip.js web worker not found');
 		}
 		zip.useWebWorkers = true;
-		zip.workerScriptsPath = ROM_PATCHER_JS_PATH + 'modules/zip.js/';
+		if (assetVersion) {
+			zip.workerScripts = {
+				inflater: [workerUrl('modules/zip.js/z-worker.js'), workerUrl('modules/zip.js/inflate.js')]
+			};
+		} else {
+			zip.workerScriptsPath = ROM_PATCHER_JS_PATH + 'modules/zip.js/';
+		}
 
 		/* check if all required HTML elements are in DOM */
 		const htmlInputFileRom = htmlElements.get('input-file-rom');
