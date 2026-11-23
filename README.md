@@ -9,6 +9,8 @@ A ROM patcher made in Javascript.
    * BPS
    * RUP
    * PPF
+   * EBP
+   * BSDiff (.bdf, .bspatch)
    * Paper Mario Star Rod (.mod)
    * VCDiff (.xdelta, .vcdiff)
 * can patch and create patches
@@ -54,6 +56,8 @@ Show all options:
 * [Pokemon Clover](https://poclo.net/download)
 * [ZeldaHacking Wiki for The Legend of Zelda: Oracle of Ages and Seasons](https://wiki.zeldahacking.net/oracle/)
 * [Pokemon Elite Redux](https://elite-redux.com/)
+* [Earthbound Beginnings](https://ebbr.neocities.org/downloads)
+* [64DD.org](https://64dd.org/patch.html)
 
 &nbsp;
 ## Resources used
