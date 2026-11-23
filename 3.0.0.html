@@ -78,7 +78,7 @@ Note for myself on how to add new versions:
 	window.addEventListener('load', function(){
 		const myPatcherSettings={
 			language: 'en',
-			requireValidation: false, /* if true, user won't be able to apply patch if the provided ROM is not valid*/
+			requireExactDisc: true,
 			allowDropFiles: true /* if true, it adds basic drag and drop support */
 		};
 		RomPatcherWeb.initialize(myPatcherSettings, {
@@ -88,10 +88,10 @@ Note for myself on how to add new versions:
 					file: 'DX_3_0_0.xdelta', //zip containing patches
 					name: 'DX 3.0 Release',
 					outputName: "Pokemon XD - DX [Director's Cut] v3.0.0", //patched ROM name
+					outputExtension: 'iso',
 				}
 			]
 		});
-		RomPatcherWeb.pickEmbededFile("DX_3_0_0.xdelta");
 	});
 	const selectedVersion = 1;
 	</script>
@@ -114,31 +114,21 @@ Note for myself on how to add new versions:
 	<div id="rom-patcher-container" style="background-color: #e7b5ec;">
 
 		<div class="rom-patcher-row margin-bottom" id="versionSelectDiv">
-			<div class="text-right"><label for="versionSelectDiv">DX Version:</label>
+			<div class="text-right"><label for="versionSelect">DX Version:</label>
 			</div>
 			<div class="rom-patcher-container-input">
 				<select id="versionSelect" onchange="changeVersion()"></select>
 			</div>
 		</div>
+		<p id="dx-source-help">Choose a full-size, uncompressed ISO from your own USA disc of Pok&#233;mon XD: Gale of Darkness. Your browser checks the entire file before enabling Apply patch. A matching ISO can have any filename. Compressed and already-patched images will be rejected.</p>
 		<div class="rom-patcher-row margin-bottom" id="rom-patcher-row-file-rom">
-			<div class="text-right"><label for="rom-patcher-input-file-rom" data-localize="yes">Pokemon XD - Gale of Darkness (USA) ROM:</label></div>
+			<div class="text-right"><label for="rom-patcher-input-file-rom">Source disc image:</label></div>
 			<div class="rom-patcher-container-input">
-				<input type="file" id="rom-patcher-input-file-rom" class="empty" disabled />
+				<input type="file" id="rom-patcher-input-file-rom" class="empty" aria-describedby="dx-source-help rom-patcher-disc-status" disabled />
 			</div>
 		</div>
+		<p id="rom-patcher-disc-status" role="status" aria-atomic="true"></p>
 		<div class="margin-bottom text-selectable text-mono" id="rom-patcher-rom-info">
-			<div class="rom-patcher-row">
-				<div class="text-right">CRC32:</div>
-				<div class="text-truncate"><span id="rom-patcher-span-crc32"></span></div>
-			</div>
-			<div class="rom-patcher-row">
-				<div class="text-right">MD5:</div>
-				<div class="text-truncate"><span id="rom-patcher-span-md5"></span></div>
-			</div>
-			<div class="rom-patcher-row">
-				<div class="text-right">SHA-1:</div>
-				<div class="text-truncate"><span id="rom-patcher-span-sha1"></span></div>
-			</div>
 			<div class="rom-patcher-row" id="rom-patcher-row-info-rom">
 				<div class="text-right">ROM:</div>
 				<div class="text-truncate"><span id="rom-patcher-span-rom-info"></span></div>
@@ -168,15 +158,6 @@ Note for myself on how to add new versions:
 			<a href="https://github.com/PepGames/DX_DirectorsCut"><button style="background-color: #6c1175">About (Github)</button></a>
 		</center>
 	</div>
-		<p style="text-align: center;">
-			You will need to provide your own LEGAL copy of Pokemon XD - Gale of Darkness (USA), select it as the "Pokemon XD - Gale of Darkness (USA) ROM".
-		</p>
-		<p style="text-align: center;">
-			This project does not provide copyrighted game files. You must legally obtain them yourself. For the patcher to work, the ROM must be called "Pokemon XD - Gale of Darkness (USA).iso" exactly.
-		</p>
-		<p style="text-align: center;">
-			Any other file types such as ".ciso", ".rvz", ".nkit", or others are incompatible with this patch and will fail.
-		</p>
 	</div></center>
 
 	<div id="rom-patcher-powered" class="text-center">

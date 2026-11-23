@@ -60,6 +60,7 @@ const RomPatcherWeb = (function () {
 		outputSuffix: true,
 		fixChecksum: false,
 		requireValidation: false,
+		requireExactDisc: false,
 
 		allowDropFiles: false,
 
@@ -70,6 +71,130 @@ const RomPatcherWeb = (function () {
 		onpatch: null
 	};
 	var romFile, patch;
+
+	// The published clean USA disc. Its contents determine compatibility even when renamed.
+	const DX_DISC_SIZE = 1459978240;
+	const DX_DISC_SHA1 = 'c1b5218f832403d15aa500ac4d6aacc8865c792d';
+	let discSelection = null;
+	let applyingDisc = false;
+
+	function showDiscStatus(text) {
+		const element = htmlElements.get('disc-status');
+		if (element) element.textContent = text;
+	}
+
+	function clearDiscSelection() {
+		const previous = discSelection;
+		discSelection = null;
+		romFile = null;
+		previous?.worker?.terminate();
+		if (previous?.reader && previous.reader.readyState === FileReader.LOADING) previous.reader.abort();
+		htmlElements.removeClass('input-file-rom', 'valid');
+	}
+
+	function rejectDisc(message) {
+		clearDiscSelection();
+		htmlElements.setValue('input-file-rom', '');
+		htmlElements.addClass('input-file-rom', 'invalid');
+		showDiscStatus(message);
+		htmlElements.enableAll();
+	}
+
+	function loadVerifiedDisc(selection) {
+		applyingDisc = true;
+		_setToastError();
+		htmlElements.disableAll();
+		showDiscStatus('Reading the verified disc for patching…');
+		function readFailed() {
+			if (discSelection !== selection) return;
+			applyingDisc = false;
+			rejectDisc('Could not read this file for patching. Choose your disc image again.');
+		}
+		try {
+			const reader = new FileReader();
+			selection.reader = reader;
+			reader.onerror = reader.onabort = readFailed;
+			reader.onload = () => {
+				if (discSelection !== selection) return;
+				try {
+					if (reader.result.byteLength !== DX_DISC_SIZE) return readFailed();
+					// BinFile wraps this buffer, which is then transferred to the patch worker.
+					romFile = new BinFile(reader.result);
+					romFile.fileName = selection.file.name;
+				} catch (error) {
+					return readFailed();
+				}
+				selection.reader = null;
+				if (typeof settings.onloadrom === 'function') settings.onloadrom(romFile);
+				showDiscStatus('Disc verified. Applying the patch…');
+				dispatchPatch();
+			};
+			reader.readAsArrayBuffer(selection.file);
+		} catch (error) {
+			readFailed();
+		}
+	}
+
+	function selectExactDisc(file) {
+		// Keep the selection fixed from the start of the full read through the worker reply.
+		if (applyingDisc) return;
+		clearDiscSelection();
+		htmlElements.removeClass('input-file-rom', 'invalid');
+		htmlElements.enableAll();
+		if (!file) {
+			showDiscStatus('Choose your clean USA disc image.');
+			return;
+		}
+		if (file.size !== DX_DISC_SIZE) {
+			rejectDisc('This file is the wrong size. Choose the uncompressed USA disc image (1,459,978,240 bytes).');
+			return;
+		}
+
+		const selection = {worker: null, reader: null, file: null};
+		discSelection = selection;
+		showDiscStatus('Checking the full disc image…');
+		const readFailed = () => {
+			if (discSelection === selection) rejectDisc('Could not read or verify this file. Choose the disc image again.');
+		};
+		try {
+			const worker = new Worker(ROM_PATCHER_JS_PATH + 'RomPatcher.webworker.disc.js');
+			selection.worker = worker;
+			worker.onerror = worker.onmessageerror = () => {
+				if (selection.worker === worker) readFailed();
+			};
+			let displayedProgress = 0;
+			worker.onmessage = event => {
+				if (discSelection !== selection || selection.worker !== worker) return;
+				if (Number.isFinite(event.data?.progress)) {
+					const progress = Math.min(100, Math.floor(event.data.progress / 10) * 10);
+					if (progress > displayedProgress) {
+						showDiscStatus('Checking the full disc image… ' + progress + '%');
+						displayedProgress = progress;
+					}
+					return;
+				}
+				if (!event.data?.sha1) return readFailed();
+				if (event.data.sha1 !== DX_DISC_SHA1) {
+					rejectDisc('This file does not match the clean USA disc. Choose another image.');
+					return;
+				}
+				worker.terminate();
+				selection.worker = null;
+				selection.file = file;
+				htmlElements.addClass('input-file-rom', 'valid');
+				showDiscStatus('Verified USA disc: ' + file.name);
+				htmlElements.enableAll();
+			};
+			worker.postMessage(file);
+		} catch (error) {
+			readFailed();
+		}
+	}
+
+	function hasVerifiedDisc() {
+		return !!discSelection?.file;
+	}
+
 
 	const isBrowserSafari = /Safari/.test(navigator.userAgent) && !/Chrome/.test(navigator.userAgent); /* Safari userAgent does not include word Chrome, Chrome includes both! */
 	const isBrowserMobile = /Mobile(\/\S+)? /.test(navigator.userAgent);
@@ -163,6 +288,7 @@ const RomPatcherWeb = (function () {
 		if (isFetching)
 			throw new Error('Rom Patcher JS: already fetching another file');
 		isFetching = true;
+		if (settings.requireExactDisc) patch = null;
 
 		htmlElements.disableAll();
 
@@ -179,7 +305,10 @@ const RomPatcherWeb = (function () {
 
 
 		fetch(decodeURI(embededPatchInfo.file))
-			.then(result => result.arrayBuffer()) // Gets the response and returns it as a blob
+			.then(result => {
+				if (settings.requireExactDisc && !result.ok) throw new Error('Patch download failed');
+				return result.arrayBuffer();
+			})
 			.then(arrayBuffer => {
 				const fetchedFile = new BinFile(arrayBuffer);
 				if (ZIPManager.isZipFile(fetchedFile)) {
@@ -214,6 +343,13 @@ const RomPatcherWeb = (function () {
 			})
 			.catch(function (evt) {
 				isFetching = false;
+				if (settings.requireExactDisc) {
+					const message = 'The bundled patch could not be downloaded. Reload the page to retry.';
+					htmlElements.setText('span-loading-embeded-patch', message);
+					_setToastError(message);
+					htmlElements.enableAll();
+					return;
+				}
 				_setToastError((_('Error downloading %s') + '<br />' + evt.message).replace('%s', embededPatchInfo.file.replace(/^.*[\/\\]/g, '')));
 			});
 	};
@@ -233,14 +369,15 @@ const RomPatcherWeb = (function () {
 	}
 
 	const _setElementsStatus = function (status, applyButtonStatus) {
-		htmlElements.setEnabled('input-file-rom', status);
+		if (settings.requireExactDisc && applyingDisc) status = false;
+		htmlElements.setEnabled('input-file-rom', settings.requireExactDisc ? !applyingDisc : status);
 		htmlElements.setEnabled('input-file-patch', status);
 		if (htmlElements.get('select-patch')) {
 			htmlElements.setEnabled('select-patch', htmlElements.get('select-patch').children.length > 1 ? status : false);
 		}
 		htmlElements.setEnabled('checkbox-alter-header', status);
 
-		if (romFile && patch && status) {
+		if (patch && status && (settings.requireExactDisc ? hasVerifiedDisc() : romFile)) {
 			if (settings.requireValidation && typeof applyButtonStatus !== 'undefined')
 				status = !!applyButtonStatus;
 			htmlElements.setEnabled('button-apply', status);
@@ -411,8 +548,15 @@ const RomPatcherWeb = (function () {
 	/* web workers */
 	const webWorkerApply = new Worker(ROM_PATCHER_JS_PATH + 'RomPatcher.webworker.apply.js');
 	webWorkerApply.onmessage = event => { // listen for events from the worker
+		if (settings.requireExactDisc && (!applyingDisc || !romFile)) return;
+		applyingDisc = false;
 		//retrieve arraybuffers back from webworker
-		romFile._u8array = event.data.romFileU8Array;
+		if (settings.requireExactDisc) {
+			romFile = null;
+			event.data.romFileU8Array = null;
+		} else {
+			romFile._u8array = event.data.romFileU8Array;
+		}
 		patch._originalPatchFile._u8array = event.data.patchFileU8Array;
 
 		htmlElements.enableAll();
@@ -437,17 +581,76 @@ const RomPatcherWeb = (function () {
 			if (typeof settings.onpatch === 'function')
 				settings.onpatch(patchedRom);
 
-			patchedRom.save();
+			try {
+				patchedRom.save();
+			} catch (error) {
+				if (!settings.requireExactDisc) throw error;
+				showDiscStatus('The download could not start. Try Apply patch again.');
+				return;
+			}
+			if (settings.requireExactDisc) showDiscStatus('Download requested. Check your browser downloads or Files.');
 			_setToastError();
 		} else {
-			_setToastError(event.data.errorMessage);
+			if (settings.requireExactDisc) showDiscStatus('The disc is still verified. You can retry Apply patch.');
+			_setToastError(settings.requireExactDisc ? 'The patch failed. Try Apply patch again or reload the page.' : event.data.errorMessage);
 		}
 	};
 	webWorkerApply.onerror = event => { // listen for exceptions from the worker
+		if (settings.requireExactDisc) {
+			applyingDisc = false;
+			patch = null; // Its transferred buffer may have been lost with the worker.
+			rejectDisc('Patching stopped. Reload the patcher, then choose your disc again.');
+			_setApplyButtonSpinner(false);
+			return;
+		}
 		htmlElements.enableAll();
 		_setApplyButtonSpinner(false);
 		_setToastError('webWorkerApply error: ' + event.message);
 	};
+
+	webWorkerApply.onmessageerror = event => {
+		if (settings.requireExactDisc && applyingDisc) webWorkerApply.onerror(event);
+	};
+
+	function dispatchPatch() {
+		const romPatcherOptions = {
+			requireValidation: settings.requireValidation,
+			removeHeader: RomPatcher.isRomHeadered(romFile) && htmlElements.isChecked('checkbox-alter-header'),
+			addHeader: RomPatcher.canRomGetHeader(romFile) && htmlElements.isChecked('checkbox-alter-header'),
+			fixChecksum: settings.fixChecksum,
+			outputSuffix: settings.outputSuffix
+		};
+
+		htmlElements.disableAll();
+		_setApplyButtonSpinner(true);
+
+		const embededPatchInfo = _getEmbededPatchInfo(patch._originalPatchFile.fileName);
+		try {
+			webWorkerApply.postMessage(
+				{
+					romFileU8Array: romFile._u8array,
+					patchFileU8Array: patch._originalPatchFile._u8array,
+					romFileName: romFile.fileName,
+					patchFileName: patch._originalPatchFile.fileName,
+					patchExtraInfo: embededPatchInfo,
+					//romFileType:romFile.fileType,
+					options: romPatcherOptions
+				},
+				[
+					romFile._u8array.buffer,
+					patch._originalPatchFile._u8array.buffer
+				]
+			);
+		} catch (error) {
+			if (!settings.requireExactDisc) throw error;
+			applyingDisc = false;
+			romFile = null;
+			showDiscStatus('The disc is still verified. You can retry Apply patch.');
+			_setApplyButtonSpinner(false);
+			htmlElements.enableAll();
+			_setToastError('Could not start patching. Try Apply patch again or reload the page.');
+		}
+	}
 
 	const webWorkerCrc = new Worker(ROM_PATCHER_JS_PATH + 'RomPatcher.webworker.crc.js');
 	webWorkerCrc.onmessage = event => { // listen for events from the worker
@@ -576,6 +779,7 @@ const RomPatcherWeb = (function () {
 		const htmlInputFileRom = htmlElements.get('input-file-rom');
 		if (htmlInputFileRom && htmlInputFileRom.tagName === 'INPUT' && htmlInputFileRom.type === 'file') {
 			htmlInputFileRom.addEventListener('change', function (evt) {
+				if (settings.requireExactDisc) return selectExactDisc(this.files?.[0]);
 				if (this.files && this.files.length) {
 					htmlElements.disableAll();
 					new BinFile(this, RomPatcherWeb.provideRomFile);
@@ -683,6 +887,12 @@ const RomPatcherWeb = (function () {
 				evt.preventDefault();
 				if (_dragEventContainsFiles(evt)) {
 					const droppedFiles = evt.dataTransfer.files;
+					if (settings.requireExactDisc) {
+						if (applyingDisc) return;
+						if (droppedFiles.length !== 1) return rejectDisc('Choose one uncompressed USA disc image.');
+						htmlElements.setValue('input-file-rom', '');
+						return selectExactDisc(droppedFiles[0]);
+					}
 					if (droppedFiles && droppedFiles.length === 1) {
 						new BinFile(droppedFiles[0], function (binFile) {
 							if (RomPatcherWeb.getEmbededPatches()) {
@@ -749,6 +959,10 @@ const RomPatcherWeb = (function () {
 		},
 
 		provideRomFile: function (binFile, transferFakeFile) {
+			if (settings.requireExactDisc) {
+				if (!applyingDisc) rejectDisc('Choose the original disc image so its contents can be verified.');
+				return;
+			}
 			htmlElements.disableAll();
 
 
@@ -789,6 +1003,7 @@ const RomPatcherWeb = (function () {
 		},
 
 		providePatchFile: function (binFile, transferFakeFile) {
+			if (settings.requireExactDisc && applyingDisc) return;
 			htmlElements.disableAll();
 
 			patch = null;
@@ -993,6 +1208,7 @@ const RomPatcherWeb = (function () {
 			});
 		},
 		setEmbededPatches: function (embededPatchInfo) {
+			if (settings.requireExactDisc && applyingDisc) return;
 			if (!currentEmbededPatches)
 				throw new Error('Rom Patcher JS: not in embeded patch mode');
 
@@ -1005,42 +1221,18 @@ const RomPatcherWeb = (function () {
 		},
 
 		applyPatch: function () {
-			if (romFile && patch) {
-				const romPatcherOptions = {
-					requireValidation: settings.requireValidation,
-					removeHeader: RomPatcher.isRomHeadered(romFile) && htmlElements.isChecked('checkbox-alter-header'),
-					addHeader: RomPatcher.canRomGetHeader(romFile) && htmlElements.isChecked('checkbox-alter-header'),
-					fixChecksum: settings.fixChecksum,
-					outputSuffix: settings.outputSuffix
-				};
-
-				htmlElements.disableAll();
-				_setApplyButtonSpinner(true);
-
-				const embededPatchInfo = _getEmbededPatchInfo(patch._originalPatchFile.fileName);
-				webWorkerApply.postMessage(
-					{
-						romFileU8Array: romFile._u8array,
-						patchFileU8Array: patch._originalPatchFile._u8array,
-						romFileName: romFile.fileName,
-						patchFileName: patch._originalPatchFile.fileName,
-						patchExtraInfo: embededPatchInfo,
-						//romFileType:romFile.fileType,
-						options: romPatcherOptions
-					},
-					[
-						romFile._u8array.buffer,
-						patch._originalPatchFile._u8array.buffer
-					]
-				);
-			} else if (!romFile) {
-				_setToastError(_('No ROM provided'));
-			} else if (!patch) {
-				_setToastError(_('No patch file provided'));
+			if (settings.requireExactDisc) {
+				if (applyingDisc || !hasVerifiedDisc()) return;
+				if (!patch) return _setToastError(_('No patch file provided'));
+				return loadVerifiedDisc(discSelection);
 			}
+			if (!romFile) return _setToastError(_('No ROM provided'));
+			if (!patch) return _setToastError(_('No patch file provided'));
+			dispatchPatch();
 		},
 
 		calculateCurrentRomChecksums: function (force) {
+			if (settings.requireExactDisc) return hasVerifiedDisc();
 			if (romFile.fileSize > 67108864 && !force) {
 				htmlElements.setText('span-crc32', _('File is too big.') + ' <span class=\"clickable\" onclick=\"RomPatcherWeb.calculateCurrentRomChecksums(true)\">' + _('Force calculate checksum') + '</span>');
 				htmlElements.setText('span-md5', '');
@@ -1062,6 +1254,7 @@ const RomPatcherWeb = (function () {
 		},
 
 		validateCurrentRom: function (checksumStartOffset) {
+			if (settings.requireExactDisc) return hasVerifiedDisc();
 			if (romFile && patch && typeof patch.validateSource === 'function') {
 				const validRom = RomPatcher.validateRom(romFile, patch, checksumStartOffset ?? 0);
 				if (validRom) {
@@ -1123,6 +1316,9 @@ const RomPatcherWeb = (function () {
 
 				if (typeof newSettings.fixChecksum === 'boolean')
 					settings.fixChecksum = newSettings.fixChecksum;
+
+				if (typeof newSettings.requireExactDisc === 'boolean')
+					settings.requireExactDisc = newSettings.requireExactDisc;
 
 				if (typeof newSettings.requireValidation === 'boolean')
 					settings.requireValidation = newSettings.requireValidation;
